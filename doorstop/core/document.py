@@ -4,6 +4,7 @@
 
 import os
 import re
+import uuid
 from collections import OrderedDict
 from itertools import chain
 
@@ -22,6 +23,17 @@ from doorstop.core.item import Item
 from doorstop.core.types import UID, Level, Prefix
 
 log = common.logger(__name__)
+
+
+def _get_uuid_creator(which):
+    """Return a function which creates UUIDs."""
+
+    variants = {'uuid1': uuid.uuid1, 'uuid4': uuid.uuid4}
+    creator = variants[which]
+    def to_str():
+        return str(creator())
+
+    return to_str
 
 
 class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
@@ -56,6 +68,7 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         self.auto = kwargs.get('auto', Document.auto)
         # Set default values
         self._attribute_defaults = None
+        self._create_uuid = None
         self._data['prefix'] = Document.DEFAULT_PREFIX
         self._data['sep'] = Document.DEFAULT_SEP
         self._data['digits'] = Document.DEFAULT_DIGITS
@@ -148,12 +161,15 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
                     self._data[key] = value.strip()
                 elif key == 'digits':
                     self._data[key] = int(value)
+                elif key == 'uuid':
+                    self._create_uuid = _get_uuid_creator(value)
+                    self._data[key] = value
                 else:
                     msg = "unexpected document setting '{}' in: {}".format(
                         key, self.config
                     )
                     raise DoorstopError(msg)
-            except (AttributeError, TypeError, ValueError):
+            except (AttributeError, KeyError, TypeError, ValueError):
                 msg = "invalid value for '{}' in: {}".format(key, self.config)
                 raise DoorstopError(msg)
         # Store parsed attributes
@@ -412,6 +428,8 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         log.debug("next level: {}".format(next_level))
         uid = UID(self.prefix, self.sep, number, self.digits)
         item = Item.new(self.tree, self, self.path, self.root, uid, level=next_level)
+        if self._create_uuid:
+            item.set_attributes({'uuid': self._create_uuid()})
         if self._attribute_defaults:
             item.set_attributes(self._attribute_defaults)
         if level and reorder:
