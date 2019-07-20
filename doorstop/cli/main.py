@@ -155,6 +155,7 @@ def main(args=None):  # pylint: disable=R0915
     _unlink(subs, shared)
     _clear(subs, shared)
     _review(subs, shared)
+    _sign(subs, shared)
     _import(subs, shared)
     _export(subs, shared)
     _publish(subs, shared)
@@ -386,6 +387,25 @@ def _review(subs, shared):
     info = "absolve items of their unreviewed status"
     sub = subs.add_parser(
         'review', description=info.capitalize() + '.', help=info, **shared
+    )
+    sub.add_argument('label', help="item UID, document prefix, or 'all'")
+    group = sub.add_mutually_exclusive_group()
+    group.add_argument(
+        '-i', '--item', action='store_true', help="indicates the 'label' is an item UID"
+    )
+    group.add_argument(
+        '-d',
+        '--document',
+        action='store_true',
+        help="indicates the 'label' is a document prefix",
+    )
+
+
+def _sign(subs, shared):
+    """Configure the `doorstop sign` subparser."""
+    info = "sign the reviewed content of items"
+    sub = subs.add_parser(
+        'sign', description=info.capitalize() + '.', help=info, **shared
     )
     sub.add_argument('label', help="item UID, document prefix, or 'all'")
     group = sub.add_mutually_exclusive_group()

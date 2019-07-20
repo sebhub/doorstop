@@ -51,6 +51,7 @@ mdx_outline = "^1.3.0"
 python-markdown-math = "0.6"
 plantuml-markdown = "^3.0"
 openpyxl = "^2.6"
+python-gnupg = "^0.4.0"
 
 [tool.poetry.dev-dependencies]
 

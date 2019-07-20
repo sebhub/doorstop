@@ -91,6 +91,7 @@ class Item(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         self._data['text'] = Item.DEFAULT_TEXT
         self._data['ref'] = Item.DEFAULT_REF
         self._data['links'] = set()
+        self._data['signatures'] = []
         if settings.ENABLE_HEADERS:
             self._data['header'] = Item.DEFAULT_HEADER
 
@@ -222,6 +223,10 @@ class Item(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
                 value = [{str(i): i.stamp.yaml} for i in sorted(value)]
             elif key == 'reviewed':
                 value = value.yaml
+            elif key == 'signatures':
+                # Skip empty signature attribute
+                if not value:
+                    continue
             else:
                 if isinstance(value, str):
                     # length of "key_text: value_text"
@@ -878,6 +883,18 @@ class Item(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         """Mark the item as reviewed."""
         log.info("marking item as reviewed...")
         self._data['reviewed'] = self.stamp(links=True)
+
+    @auto_load
+    def signatures(self):
+        """Get the signatures of the item."""
+        return self._data['signatures']
+
+    @auto_save
+    def sign(self, gpg):
+        """Sign the reviewed content of the item."""
+        log.info("sign the item...")
+        sig = gpg.sign(self._get_reviewed_values(True))
+        self._data['signatures'].append(sig)
 
     @delete_item
     def delete(self, path=None):

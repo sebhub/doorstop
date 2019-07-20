@@ -2,8 +2,10 @@
 
 """Command functions."""
 
+import base64
 import os
 import time
+import tempfile
 
 from doorstop import common, server
 from doorstop.cli import utilities
@@ -67,6 +69,47 @@ class CycleTracker:
             yield from self._dfs_visit(item, tree)
 
 
+class SignatureHandler:
+    """Handler to sign and verify item attribute values using GnuPG."""
+
+    def __init__(self):
+        """Initialize a signature handler."""
+        import gnupg
+
+        self.gpg = gnupg.GPG()
+
+    def sign(self, data):
+        sig = self.gpg.sign(data, detach=True, binary=True).data
+        return {'pgp': base64.b64encode(sig).decode('utf-8')}
+
+    def __call__(self, item, document, tree):
+        """Get the verification status of the specified item.
+
+        :param item: the UID of the item to verify
+        :param document: unused
+        :param tree: unused
+
+        :return: generator of :class:`~doorstop.common.DoorstopWarning`,
+                              :class:`~doorstop.common.DoorstopInfo`
+
+        """
+        for type_sig in item.signatures():
+            if 'pgp' in type_sig:
+                with tempfile.NamedTemporaryFile() as tmp:
+                    sig = type_sig['pgp']
+                    tmp.write(base64.b64decode(sig))
+                    tmp.flush()
+                    data = item._get_reviewed_values(True)
+                    ver = self.gpg.verify_data(tmp.name, bytes(data, 'utf-8'))
+                    info = "PGP signature '{}', key identifier '{}', user name '{}'".format(sig, ver.key_id, ver.username)
+                    if ver.trust_level:
+                        yield common.DoorstopInfo("verification successful: " + info)
+                    else:
+                        yield common.DoorstopWarning("verification failed: " + info)
+            else:
+                yield common.DoorstopWarning("unexpected signature type: {}".format(typ))
+
+
 def get(name):
     """Get a command function by name."""
     if name:
@@ -94,7 +137,7 @@ def run(args, cwd, error, catch=True):  # pylint: disable=W0613
         # validate it
         utilities.show("validating items...", flush=True)
         cycle_tracker = CycleTracker()
-        valid = tree.validate(skip=args.skip, item_hook=cycle_tracker)
+        valid = tree.validate(skip=args.skip, item_hook=[cycle_tracker,SignatureHandler()])
 
     if not success:
         return False
@@ -419,6 +462,29 @@ def run_review(args, cwd, error, catch=True):
         for item in _iter_items(args, tree, error):
             utilities.show("marking item {} as reviewed...".format(item.uid))
             item.review()
+
+    if not success:
+        return False
+
+    return True
+
+
+def run_sign(args, cwd, error, catch=True):
+    """Process arguments and run the `doorstop sign` subcommand.
+
+    :param args: Namespace of CLI arguments
+    :param cwd: current working directory
+    :param error: function to call for CLI errors
+    :param catch: catch and log :class:`~doorstop.common.DoorstopError`
+
+    """
+    with utilities.capture(catch=catch) as success:
+        tree = _get_tree(args, cwd)
+        gpg = SignatureHandler()
+
+        for item in _iter_items(args, tree, error):
+            utilities.show("sign item {}...".format(item.uid))
+            item.sign(gpg)
 
     if not success:
         return False
