@@ -23,6 +23,10 @@ from doorstop.core.types import UID, Level, Prefix
 
 log = common.logger(__name__)
 
+def _yield_from_item_hooks(hooks, item, document, tree):
+    for h in hooks:
+        yield from h(item=item, document=document, tree=tree)
+
 
 class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
     """Represents a document directory containing an outline of items."""
@@ -692,7 +696,7 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         """
         assert document_hook is None
         skip = [] if skip is None else skip
-        hook = item_hook if item_hook else lambda **kwargs: []
+        hooks = [] if item_hook is None else item_hook if isinstance(item_hook, list) else [item_hook]
 
         if self.prefix in skip:
             log.info("skipping document %s...", self)
@@ -717,7 +721,7 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
 
             # Check item
             for issue in chain(
-                hook(item=item, document=self, tree=self.tree),
+                _yield_from_item_hooks(hooks, item, self, self.tree),
                 item.get_issues(skip=skip),
             ):
 
