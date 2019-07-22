@@ -846,19 +846,24 @@ class Item(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         return sorted(child_items), child_documents
 
     @auto_load
-    def stamp(self, links=False):
-        """Hash the item's key content for later comparison."""
-        values = [self.uid, self.text, self.ref]
+    def _get_reviewed_values(self, links):
+        """Get the item's reviewed attribute values."""
+        values = str(self.uid) + str(self.text) + str(self.ref)
         if links:
-            values.extend(self.links)
+            for link in self.links:
+                values += str(link)
         for key in self.document.extended_reviewed:
             if key in self._data:
-                values.append(self._dump(self._data[key]))
+                values += self._dump(self._data[key])
             else:
                 log.warning(
                     "{}: missing extended reviewed attribute: {}".format(self.uid, key)
                 )
-        return Stamp(*values)
+        return values
+
+    def stamp(self, links=False):
+        """Hash the item's key content for later comparison."""
+        return Stamp(Stamp.digest(self._get_reviewed_values(links)))
 
     @auto_save
     def clear(self, parents=None):
